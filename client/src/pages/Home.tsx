@@ -3,8 +3,8 @@
  * dengan koral tomat, biru tinta, kertas krem, dan tipografi editorial.
  */
 import { Button } from "@/components/ui/button";
-import { Check, ClipboardPaste, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { Check, ClipboardPaste, FileUp, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { FormEvent, type ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 
 const COLORS = ["#F04B36", "#1E4668", "#E8B843", "#5F8668", "#EA8A6D", "#577691", "#C96E85", "#97A56C"];
 const MAX_OPTIONS = 50;
@@ -34,6 +34,34 @@ function extractEntries(raw: string) {
     });
 }
 
+function extractCsvEntries(raw: string) {
+  const values: string[] = [];
+  let currentValue = "";
+  let insideQuote = false;
+
+  for (let index = 0; index < raw.length; index += 1) {
+    const character = raw[index];
+    const nextCharacter = raw[index + 1];
+
+    if (character === '"') {
+      if (insideQuote && nextCharacter === '"') {
+        currentValue += '"';
+        index += 1;
+      } else {
+        insideQuote = !insideQuote;
+      }
+    } else if (!insideQuote && (character === "," || character === ";" || character === "\n" || character === "\r")) {
+      values.push(currentValue);
+      currentValue = "";
+    } else {
+      currentValue += character;
+    }
+  }
+  values.push(currentValue);
+
+  return extractEntries(values.join("\n"));
+}
+
 export default function Home() {
   const [options, setOptions] = useState<string[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -49,7 +77,9 @@ export default function Home() {
   const [rotation, setRotation] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
   const [winner, setWinner] = useState<{ name: string; ticketNumber: number } | null>(null);
+  const [importMessage, setImportMessage] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const resultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -169,6 +199,46 @@ export default function Home() {
     setWinner(null);
   }
 
+  function addImportedEntries(entries: string[], fileName: string) {
+    const currentEntries = new Set(options.map((option) => option.toLocaleLowerCase()));
+    const newItems = entries.filter((entry) => !currentEntries.has(entry.toLocaleLowerCase()));
+    const acceptedItems = newItems.slice(0, MAX_OPTIONS - options.length);
+
+    if (!acceptedItems.length) {
+      setImportMessage(options.length >= MAX_OPTIONS ? "Roda sudah mencapai batas 50 pilihan." : "Tidak ada pilihan baru di dalam berkas.");
+      return;
+    }
+
+    setOptions((current) => [...current, ...acceptedItems]);
+    setWinner(null);
+    setImportMessage(`${acceptedItems.length} pilihan dari ${fileName} berhasil dimasukkan.`);
+  }
+
+  function handleFileImport(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || isSpinning) return;
+
+    const extension = file.name.split(".").pop()?.toLocaleLowerCase();
+    if (extension !== "txt" && extension !== "csv") {
+      setImportMessage("Pilih berkas dengan format .txt atau .csv.");
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      setImportMessage("Ukuran berkas terlalu besar. Pilih berkas maksimal 1 MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const content = typeof reader.result === "string" ? reader.result : "";
+      const entries = extension === "csv" ? extractCsvEntries(content) : extractEntries(content);
+      addImportedEntries(entries, file.name);
+    };
+    reader.onerror = () => setImportMessage("Berkas tidak dapat dibaca. Coba pilih berkas lain.");
+    reader.readAsText(file);
+  }
+
   function removeOption(index: number) {
     if (isSpinning) return;
     setOptions((current) => current.filter((_, itemIndex) => itemIndex !== index));
@@ -180,6 +250,7 @@ export default function Home() {
     setOptions([]);
     setWinner(null);
     setRotation(0);
+    setImportMessage("");
   }
 
   function spinWheel() {
@@ -276,6 +347,20 @@ export default function Home() {
                 </div>
                 {draft.trim() && !canAddCount ? <p className="mt-2 text-[11px] font-bold text-[#F04B36]">Tidak ada pilihan baru yang bisa dimasukkan.</p> : null}
               </form>
+
+              <div className="mt-4 rounded-xl border-2 border-dashed border-[#16354F]/20 bg-[#FFFDF8] p-3">
+                <input ref={fileInputRef} type="file" accept=".txt,.csv,text/plain,text/csv" onChange={handleFileImport} className="sr-only" aria-label="Impor pilihan dari berkas" />
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-extrabold text-[#16354F]">Punya daftar panjang?</p>
+                    <p className="mt-0.5 text-[11px] font-semibold leading-relaxed text-[#16354F]/60">Impor .txt per baris atau .csv dari setiap sel.</p>
+                  </div>
+                  <Button type="button" onClick={() => fileInputRef.current?.click()} disabled={isSpinning || options.length >= MAX_OPTIONS} className="h-10 shrink-0 rounded-xl border-2 border-[#16354F] bg-white px-3 text-xs font-extrabold uppercase tracking-[0.06em] text-[#16354F] shadow-[3px_3px_0_#16354F] hover:bg-[#FFF3E9] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_#16354F]">
+                    <FileUp className="h-4 w-4" /> Impor file
+                  </Button>
+                </div>
+                {importMessage ? <p aria-live="polite" className="mt-2 border-t border-dashed border-[#16354F]/20 pt-2 text-[11px] font-bold leading-snug text-[#F04B36]">{importMessage}</p> : null}
+              </div>
 
               <div className="mt-5 max-h-[286px] space-y-2 overflow-y-auto pr-1">
                 {options.length ? options.map((option, index) => (
