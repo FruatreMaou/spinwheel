@@ -7,3 +7,6 @@
 - [x] Menambahkan pemilih berkas untuk format .txt dan .csv.
 - [x] Memproses setiap baris atau nilai CSV menjadi pilihan baru tanpa duplikasi.
 - [x] Menguji validasi format, batas 50 pilihan, dan tampilan impor.
+- [x] Menambahkan konfigurasi build statis untuk Vercel dan Netlify.
+- [x] Menulis panduan deployment eksternal yang ringkas.
+- [x] Memverifikasi build produksi siap diunggah.
