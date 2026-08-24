@@ -65,3 +65,9 @@ Wordmark memakai “SPIN” yang padat dan “WHEEL” dengan gaya serif miring,
 
 ### Signature Brand Color
 **Koral Tomat — #F04B36**. Warna ini selalu menandai dorongan aksi, hasil, dan identitas utama.
+
+## Style Decisions
+
+- Roda dalam keadaan kosong tetap menampilkan sektor cetak samar, titik radial, dan lingkaran bertanda agar panggung permainan terasa hidup sebelum pilihan dimasukkan.
+- Kartu hasil selalu diperlakukan sebagai nota undian dengan dasar kertas hangat, garis putus-putus, serta cap tinta transparan; bukan panel digital datar.
+- Confetti difokuskan sebagai orbit keberuntungan di sekitar roda dan pointer agar dekorasi mendukung aksi putaran, bukan menjadi wallpaper halaman.

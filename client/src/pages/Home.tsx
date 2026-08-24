@@ -3,12 +3,14 @@
  * dengan koral tomat, biru tinta, kertas krem, dan tipografi editorial.
  */
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Check, ClipboardPaste, FileUp, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { FormEvent, type ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 
 const COLORS = ["#F04B36", "#1E4668", "#E8B843", "#5F8668", "#EA8A6D", "#577691", "#C96E85", "#97A56C"];
 const MAX_OPTIONS = 50;
 const STORAGE_KEY = "spinwheel-v2-user-options";
+const AUTO_REMOVE_STORAGE_KEY = "spinwheel-auto-remove-winner";
 
 const ASSETS = {
   logo: "/manus-storage/spinwheel-logo_3dfdb099.png",
@@ -76,8 +78,9 @@ export default function Home() {
   const [draft, setDraft] = useState("");
   const [rotation, setRotation] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [winner, setWinner] = useState<{ name: string; ticketNumber: number } | null>(null);
+  const [winner, setWinner] = useState<{ name: string; ticketNumber: number; removed: boolean } | null>(null);
   const [importMessage, setImportMessage] = useState("");
+  const [autoRemoveWinner, setAutoRemoveWinner] = useState(() => localStorage.getItem(AUTO_REMOVE_STORAGE_KEY) === "true");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -85,6 +88,10 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(options));
   }, [options]);
+
+  useEffect(() => {
+    localStorage.setItem(AUTO_REMOVE_STORAGE_KEY, String(autoRemoveWinner));
+  }, [autoRemoveWinner]);
 
   useEffect(() => {
     return () => {
@@ -117,6 +124,22 @@ export default function Home() {
       context.arc(center, center, radius, 0, Math.PI * 2);
       context.fillStyle = "#F2E4C6";
       context.fill();
+      context.save();
+      context.strokeStyle = "rgba(22, 53, 79, 0.16)";
+      context.lineWidth = 1.25;
+      context.setLineDash([3, 9]);
+      for (let tick = 0; tick < 12; tick += 1) {
+        const angle = -Math.PI / 2 + (tick * Math.PI * 2) / 12;
+        context.beginPath();
+        context.moveTo(center + Math.cos(angle) * radius * 0.26, center + Math.sin(angle) * radius * 0.26);
+        context.lineTo(center + Math.cos(angle) * radius * 0.93, center + Math.sin(angle) * radius * 0.93);
+        context.stroke();
+      }
+      context.setLineDash([]);
+      context.beginPath();
+      context.arc(center, center, radius * 0.75, 0, Math.PI * 2);
+      context.stroke();
+      context.restore();
       context.setLineDash([7, 7]);
       context.lineWidth = 3;
       context.strokeStyle = "#16354f";
@@ -256,6 +279,8 @@ export default function Home() {
   function spinWheel() {
     if (isSpinning || options.length < 2) return;
     const winnerIndex = Math.floor(Math.random() * options.length);
+    const selectedOption = options[winnerIndex];
+    const shouldAutoRemove = autoRemoveWinner;
     const slice = 360 / options.length;
     const destination = normalized(360 - (winnerIndex + 0.5) * slice);
     const current = normalized(rotation);
@@ -266,20 +291,23 @@ export default function Home() {
     setIsSpinning(true);
     setRotation(nextRotation);
     resultTimer.current = setTimeout(() => {
-      setWinner({ name: options[winnerIndex], ticketNumber: winnerIndex + 1 });
+      setWinner({ name: selectedOption, ticketNumber: winnerIndex + 1, removed: shouldAutoRemove });
+      if (shouldAutoRemove) {
+        setOptions((current) => current.filter((_, index) => index !== winnerIndex));
+      }
       setIsSpinning(false);
     }, 4850);
   }
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#FFF9ED] text-[#16354F]">
-      <img className="pointer-events-none absolute -right-20 top-8 z-0 hidden w-[45rem] max-w-none opacity-70 lg:block" src={ASSETS.confetti} alt="" aria-hidden="true" />
+      <img className="pointer-events-none absolute -left-28 top-[18rem] z-0 hidden w-[44rem] max-w-none rotate-[-8deg] opacity-55 lg:block" src={ASSETS.confetti} alt="" aria-hidden="true" />
       <div className="relative z-10 mx-auto max-w-[1440px] px-5 pb-10 pt-5 sm:px-8 lg:px-12 lg:pb-12">
         <header className="flex items-center justify-between border-b-2 border-dashed border-[#16354F]/25 pb-5">
           <a href="#spin" className="group flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#F04B36]">
             <img src={ASSETS.logo} alt="" className="h-11 w-11 transition-transform duration-200 group-hover:rotate-12" />
             <span className="leading-none">
-              <span className="block font-serif text-2xl font-bold tracking-tight">Spin<span className="italic text-[#F04B36]">Wheel</span></span>
+              <span className="block font-serif text-2xl font-bold uppercase tracking-[-0.08em]"><span className="text-[#16354F]">Spin</span><span className="ml-0.5 italic text-[#F04B36]">Wheel</span></span>
               <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.22em] text-[#16354F]/65">Loket keputusan</span>
             </span>
           </a>
@@ -328,12 +356,20 @@ export default function Home() {
               <div className="mb-5 flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-[#F04B36]">Meja loket</p>
-                  <h2 className="mt-1 font-serif text-3xl font-bold tracking-[-0.03em]">Masukkan pilihan</h2>
+                  <h2 className="mt-1 font-serif text-3xl font-bold tracking-[-0.045em] sm:text-[2rem]">Masukkan pilihan</h2>
                   <p className="mt-1 text-xs font-bold text-[#16354F]/55">{options.length} / {MAX_OPTIONS} kupon terisi</p>
                 </div>
                 <button onClick={clearOptions} disabled={isSpinning || !options.length} type="button" className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-dashed border-[#16354F]/50 text-[#16354F] transition-colors hover:border-[#F04B36] hover:bg-[#FFF3E9] hover:text-[#F04B36] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#F04B36] disabled:opacity-40" aria-label="Kosongkan semua pilihan" title="Kosongkan semua pilihan">
                   <RotateCcw className="h-4 w-4" />
                 </button>
+              </div>
+
+              <div className="mb-5 flex items-center justify-between gap-4 rounded-xl border-2 border-dashed border-[#16354F]/20 bg-[#FFFDF8] px-3.5 py-3">
+                <label htmlFor="auto-remove-winner" className="min-w-0 cursor-pointer">
+                  <span className="block text-xs font-extrabold text-[#16354F]">Hapus pemenang otomatis</span>
+                  <span className="mt-0.5 block text-[11px] font-semibold leading-relaxed text-[#16354F]/60">Pilihan yang keluar tidak ikut putaran berikutnya.</span>
+                </label>
+                <Switch id="auto-remove-winner" checked={autoRemoveWinner} onCheckedChange={setAutoRemoveWinner} disabled={isSpinning} aria-label="Hapus pemenang otomatis" className="h-6 w-10 border-2 border-[#16354F]/35 data-[state=checked]:bg-[#F04B36]" />
               </div>
 
               <form onSubmit={addOptions}>
@@ -379,16 +415,17 @@ export default function Home() {
 
               <div className="mt-6 border-t-2 border-dashed border-[#16354F]/20 pt-5">
                 {winner ? (
-                  <div className="relative isolate overflow-hidden rounded-2xl border-2 border-[#16354F] bg-[#FFF3E9] p-5">
+                  <div className="relative isolate overflow-hidden rounded-2xl border-2 border-[#16354F] bg-[#FFF3E9] p-5 shadow-[3px_3px_0_rgba(22,53,79,0.14)]">
                     <img src={ASSETS.stamp} alt="" aria-hidden="true" className="pointer-events-none absolute -right-7 -top-5 -z-10 w-44 rotate-[-10deg] opacity-15" />
                     <p className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#F04B36]"><Check className="h-4 w-4 rounded-full bg-[#F04B36] p-[2px] text-white" /> Kartu yang didapat</p>
                     <p className="mt-2 font-serif text-3xl font-bold leading-none tracking-[-0.035em]">{winner.name}</p>
-                    <div className="mt-4 flex items-center justify-between border-t-2 border-dashed border-[#16354F]/20 pt-3 text-[10px] font-extrabold uppercase tracking-[0.13em] text-[#16354F]/60"><span>Kartu #{String(winner.ticketNumber).padStart(2, "0")}</span><span>Hasil resmi roda</span></div>
+                    <div className="mt-4 flex items-center justify-between border-t-2 border-dashed border-[#16354F]/20 pt-3 text-[10px] font-extrabold uppercase tracking-[0.13em] text-[#16354F]/60"><span>Kartu #{String(winner.ticketNumber).padStart(2, "0")}</span><span>{winner.removed ? "Dikeluarkan dari roda" : "Tetap di dalam roda"}</span></div>
                   </div>
                 ) : (
-                  <div className="rounded-2xl bg-[#16354F] px-5 py-4 text-[#FFF9ED]">
+                  <div className="relative isolate overflow-hidden rounded-2xl border-2 border-[#16354F] bg-[#F2E4C6] px-5 py-4 text-[#16354F] shadow-[3px_3px_0_rgba(22,53,79,0.14)]">
+                    <img src={ASSETS.stamp} alt="" aria-hidden="true" className="pointer-events-none absolute -right-5 -top-8 -z-10 w-40 rotate-[-10deg] opacity-15" />
                     <p className="font-serif text-xl font-bold">Kartu hasil menunggu</p>
-                    <p className="mt-1 text-xs font-medium leading-relaxed text-[#FFF9ED]/70">Tambahkan setidaknya dua pilihan, lalu putar roda untuk mendapatkan kartu.</p>
+                    <p className="mt-1 text-xs font-semibold leading-relaxed text-[#16354F]/65">Tambahkan setidaknya dua pilihan, lalu putar roda untuk mendapatkan kartu.</p>
                   </div>
                 )}
               </div>

@@ -10,3 +10,6 @@
 - [x] Menambahkan konfigurasi build statis untuk Vercel dan Netlify.
 - [x] Menulis panduan deployment eksternal yang ringkas.
 - [x] Memverifikasi build produksi siap diunggah.
+- [x] Menambahkan pilihan pengaturan hapus pemenang otomatis.
+- [x] Menghapus pemenang dari daftar setelah hasil putaran ditampilkan bila diaktifkan.
+- [x] Memeriksa kondisi roda saat pilihan tersisa kurang dari dua.
