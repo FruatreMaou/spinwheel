@@ -3,12 +3,12 @@
  * dengan koral tomat, biru tinta, kertas krem, dan tipografi editorial.
  */
 import { Button } from "@/components/ui/button";
-import { Check, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { Check, ClipboardPaste, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 const COLORS = ["#F04B36", "#1E4668", "#E8B843", "#5F8668", "#EA8A6D", "#577691", "#C96E85", "#97A56C"];
-const DEFAULT_OPTIONS = ["Nasi goreng", "Sate ayam", "Kwetiau", "Salad buah", "Seblak", "Bubur ayam"];
-const STORAGE_KEY = "spinwheel-mini-options";
+const MAX_OPTIONS = 50;
+const STORAGE_KEY = "spinwheel-v2-user-options";
 
 const ASSETS = {
   logo: "/manus-storage/spinwheel-logo_3dfdb099.png",
@@ -21,21 +21,34 @@ function normalized(degrees: number) {
   return ((degrees % 360) + 360) % 360;
 }
 
+function extractEntries(raw: string) {
+  const seen = new Set<string>();
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^[\-•*]\s*/, ""))
+    .filter((line) => {
+      const key = line.toLocaleLowerCase();
+      if (!line || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 export default function Home() {
   const [options, setOptions] = useState<string[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return DEFAULT_OPTIONS;
+    if (!saved) return [];
     try {
       const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) && parsed.length >= 2 ? parsed : DEFAULT_OPTIONS;
+      return Array.isArray(parsed) ? parsed.slice(0, MAX_OPTIONS) : [];
     } catch {
-      return DEFAULT_OPTIONS;
+      return [];
     }
   });
   const [draft, setDraft] = useState("");
   const [rotation, setRotation] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [winner, setWinner] = useState<string | null>(null);
+  const [winner, setWinner] = useState<{ name: string; ticketNumber: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const resultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -51,7 +64,7 @@ export default function Home() {
 
   const drawWheel = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas || options.length < 2) return;
+    if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const size = Math.max(Math.floor(rect.width), 280);
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
@@ -64,8 +77,32 @@ export default function Home() {
     context.clearRect(0, 0, size, size);
     const center = size / 2;
     const radius = center - 14;
-    const segment = (Math.PI * 2) / options.length;
 
+    if (options.length < 2) {
+      context.beginPath();
+      context.arc(center, center, radius + 7, 0, Math.PI * 2);
+      context.fillStyle = "#16354f";
+      context.fill();
+      context.beginPath();
+      context.arc(center, center, radius, 0, Math.PI * 2);
+      context.fillStyle = "#F2E4C6";
+      context.fill();
+      context.setLineDash([7, 7]);
+      context.lineWidth = 3;
+      context.strokeStyle = "#16354f";
+      context.stroke();
+      context.setLineDash([]);
+      context.fillStyle = "#16354f";
+      context.font = `700 ${Math.max(18, Math.min(28, size / 17))}px "DM Serif Display", serif`;
+      context.textAlign = "center";
+      context.fillText("Siapkan roda", center, center - 10);
+      context.font = `700 ${Math.max(11, Math.min(15, size / 31))}px "DM Sans", sans-serif`;
+      context.fillStyle = "#F04B36";
+      context.fillText("Tambahkan minimal 2 pilihan", center, center + 22);
+      return;
+    }
+
+    const segment = (Math.PI * 2) / options.length;
     context.beginPath();
     context.arc(center, center, radius + 7, 0, Math.PI * 2);
     context.fillStyle = "#16354f";
@@ -85,16 +122,18 @@ export default function Home() {
       context.strokeStyle = "#FFF9ED";
       context.stroke();
 
-      context.save();
-      context.translate(center + Math.cos(mid) * radius * 0.6, center + Math.sin(mid) * radius * 0.6);
-      context.rotate(mid + Math.PI / 2);
-      context.fillStyle = index % COLORS.length === 2 ? "#16354f" : "#FFF9ED";
-      context.font = `700 ${Math.max(11, Math.min(16, size / 27))}px DM Sans, sans-serif`;
-      context.textAlign = "center";
-      context.textBaseline = "middle";
-      const shortText = option.length > 16 ? `${option.slice(0, 15)}…` : option;
-      context.fillText(shortText, 0, 0, radius * 0.5);
-      context.restore();
+      if (options.length <= 16) {
+        context.save();
+        context.translate(center + Math.cos(mid) * radius * 0.6, center + Math.sin(mid) * radius * 0.6);
+        context.rotate(mid + Math.PI / 2);
+        context.fillStyle = index % COLORS.length === 2 ? "#16354f" : "#FFF9ED";
+        context.font = `700 ${Math.max(11, Math.min(16, size / 27))}px "DM Sans", sans-serif`;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        const shortText = option.length > 16 ? `${option.slice(0, 15)}…` : option;
+        context.fillText(shortText, 0, 0, radius * 0.5);
+        context.restore();
+      }
     });
 
     context.beginPath();
@@ -117,24 +156,28 @@ export default function Home() {
     return () => window.removeEventListener("resize", redraw);
   }, [drawWheel]);
 
-  function addOption(event: FormEvent) {
+  const parsedDraft = extractEntries(draft);
+  const existingOptions = new Set(options.map((option) => option.toLocaleLowerCase()));
+  const newEntries = parsedDraft.filter((entry) => !existingOptions.has(entry.toLocaleLowerCase()));
+  const canAddCount = Math.min(newEntries.length, MAX_OPTIONS - options.length);
+
+  function addOptions(event: FormEvent) {
     event.preventDefault();
-    const value = draft.trim();
-    if (!value || options.length >= 12 || options.some((option) => option.toLowerCase() === value.toLowerCase())) return;
-    setOptions((current) => [...current, value]);
+    if (!canAddCount || isSpinning) return;
+    setOptions((current) => [...current, ...newEntries.slice(0, MAX_OPTIONS - current.length)]);
     setDraft("");
     setWinner(null);
   }
 
   function removeOption(index: number) {
-    if (options.length <= 2 || isSpinning) return;
+    if (isSpinning) return;
     setOptions((current) => current.filter((_, itemIndex) => itemIndex !== index));
     setWinner(null);
   }
 
-  function resetOptions() {
+  function clearOptions() {
     if (isSpinning) return;
-    setOptions(DEFAULT_OPTIONS);
+    setOptions([]);
     setWinner(null);
     setRotation(0);
   }
@@ -152,7 +195,7 @@ export default function Home() {
     setIsSpinning(true);
     setRotation(nextRotation);
     resultTimer.current = setTimeout(() => {
-      setWinner(options[winnerIndex]);
+      setWinner({ name: options[winnerIndex], ticketNumber: winnerIndex + 1 });
       setIsSpinning(false);
     }, 4850);
   }
@@ -182,7 +225,7 @@ export default function Home() {
               <div className="absolute inset-0 -z-10 bg-[#FFF9ED]/20" aria-hidden="true" />
               <p className="mb-3 inline-flex rounded-full border-2 border-[#16354F] bg-[#FFF9ED] px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.2em]">Keputusan kecil, drama besar</p>
               <h1 className="max-w-md font-serif text-4xl font-bold leading-[0.9] tracking-[-0.045em] sm:text-5xl">Biarkan roda yang <span className="text-[#F04B36] italic">menentukan.</span></h1>
-              <p className="mt-4 max-w-sm text-sm font-medium leading-relaxed text-[#16354F]/80">Masukkan pilihan, tekan putar, lalu terima hasilnya. Tanpa rapat. Tanpa debat.</p>
+              <p className="mt-4 max-w-sm text-sm font-medium leading-relaxed text-[#16354F]/80">Masukkan pilihanmu sendiri, tekan putar, lalu terima kartu hasilnya.</p>
             </div>
 
             <div className="relative -mt-20 px-3 sm:-mt-24 sm:px-10">
@@ -193,16 +236,7 @@ export default function Home() {
                 </div>
                 <div className="absolute inset-0 rounded-full bg-[#16354F] p-[10px] shadow-[10px_12px_0_rgba(22,53,79,0.22)] sm:p-[13px]">
                   <div className="h-full w-full overflow-hidden rounded-full bg-[#FFF9ED]">
-                    <canvas
-                      ref={canvasRef}
-                      aria-label="Roda pilihan"
-                      role="img"
-                      className="h-full w-full will-change-transform"
-                      style={{
-                        transform: `rotate(${rotation}deg)`,
-                        transition: isSpinning ? "transform 4.8s cubic-bezier(0.1, 0.75, 0.16, 1)" : "none",
-                      }}
-                    />
+                    <canvas ref={canvasRef} aria-label="Roda pilihan" role="img" className="h-full w-full will-change-transform" style={{ transform: `rotate(${rotation}deg)`, transition: isSpinning ? "transform 4.8s cubic-bezier(0.1, 0.75, 0.16, 1)" : "none" }} />
                   </div>
                 </div>
                 <span className="absolute left-[5%] top-[20%] h-3 w-3 rounded-full bg-[#E8B843] shadow-[0_0_0_4px_#FFF9ED]" aria-hidden="true" />
@@ -213,65 +247,63 @@ export default function Home() {
                 <Button onClick={spinWheel} disabled={isSpinning || options.length < 2} className="h-14 w-full rounded-2xl border-2 border-[#16354F] bg-[#F04B36] text-base font-extrabold uppercase tracking-[0.13em] text-white shadow-[5px_5px_0_#16354F] transition-transform duration-150 hover:bg-[#dc402d] active:translate-x-[3px] active:translate-y-[3px] active:shadow-[2px_2px_0_#16354F] disabled:cursor-not-allowed disabled:opacity-60">
                   {isSpinning ? "Roda lagi memilih…" : "Putar sekarang"}
                 </Button>
-                <p className="mt-3 text-center text-xs font-semibold text-[#16354F]/60">{options.length} pilihan di dalam roda · maksimal 12</p>
+                <p className="mt-3 text-center text-xs font-semibold text-[#16354F]/60">{options.length} pilihan di dalam roda · maksimal {MAX_OPTIONS}</p>
               </div>
             </div>
           </div>
 
           <aside className="relative mt-4 lg:mt-0">
             <div className="relative overflow-hidden rounded-[2rem] border-[3px] border-[#16354F] bg-white px-5 pb-6 pt-5 shadow-[8px_8px_0_#16354F] sm:px-7 sm:pb-7 sm:pt-6">
-              <div className="mb-6 flex items-start justify-between gap-4">
+              <div className="mb-5 flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-[#F04B36]">Meja loket</p>
-                  <h2 className="mt-1 font-serif text-3xl font-bold tracking-[-0.03em]">Masukkan kupon</h2>
+                  <h2 className="mt-1 font-serif text-3xl font-bold tracking-[-0.03em]">Masukkan pilihan</h2>
+                  <p className="mt-1 text-xs font-bold text-[#16354F]/55">{options.length} / {MAX_OPTIONS} kupon terisi</p>
                 </div>
-                <button onClick={resetOptions} disabled={isSpinning} type="button" className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-dashed border-[#16354F]/50 text-[#16354F] transition-colors hover:border-[#F04B36] hover:bg-[#FFF3E9] hover:text-[#F04B36] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#F04B36] disabled:opacity-40" aria-label="Kembalikan pilihan awal" title="Kembalikan pilihan awal">
+                <button onClick={clearOptions} disabled={isSpinning || !options.length} type="button" className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-dashed border-[#16354F]/50 text-[#16354F] transition-colors hover:border-[#F04B36] hover:bg-[#FFF3E9] hover:text-[#F04B36] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#F04B36] disabled:opacity-40" aria-label="Kosongkan semua pilihan" title="Kosongkan semua pilihan">
                   <RotateCcw className="h-4 w-4" />
                 </button>
               </div>
 
-              <form onSubmit={addOption} className="flex gap-2">
-                <label className="sr-only" htmlFor="new-option">Pilihan baru</label>
-                <input
-                  id="new-option"
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  disabled={isSpinning || options.length >= 12}
-                  maxLength={28}
-                  placeholder="Contoh: martabak manis"
-                  className="h-12 min-w-0 flex-1 rounded-xl border-2 border-[#16354F]/25 bg-[#FFF9ED] px-4 text-sm font-semibold placeholder:text-[#16354F]/42 focus:border-[#F04B36] focus:outline-none disabled:opacity-60"
-                />
-                <Button type="submit" disabled={isSpinning || !draft.trim() || options.length >= 12} className="h-12 shrink-0 rounded-xl border-2 border-[#16354F] bg-[#E8B843] px-4 text-[#16354F] shadow-[3px_3px_0_#16354F] hover:bg-[#dca72f] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_#16354F]">
-                  <Plus className="h-5 w-5" /><span className="sr-only">Tambah</span>
-                </Button>
+              <form onSubmit={addOptions}>
+                <label className="sr-only" htmlFor="new-option">Daftar pilihan baru</label>
+                <textarea id="new-option" value={draft} onChange={(event) => setDraft(event.target.value)} disabled={isSpinning || options.length >= MAX_OPTIONS} placeholder={"Tulis atau tempel daftar di sini.\nSatu baris = satu pilihan."} className="min-h-[106px] w-full resize-y rounded-xl border-2 border-[#16354F]/25 bg-[#FFF9ED] px-4 py-3 text-sm font-semibold leading-relaxed placeholder:text-[#16354F]/42 focus:border-[#F04B36] focus:outline-none disabled:opacity-60" />
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-bold leading-snug text-[#16354F]/60"><ClipboardPaste className="h-4 w-4 shrink-0 text-[#F04B36]" /> Satu baris akan dideteksi sebagai satu pilihan.</p>
+                  <Button type="submit" disabled={isSpinning || !canAddCount || options.length >= MAX_OPTIONS} className="h-10 shrink-0 rounded-xl border-2 border-[#16354F] bg-[#E8B843] px-3 text-xs font-extrabold uppercase tracking-[0.07em] text-[#16354F] shadow-[3px_3px_0_#16354F] hover:bg-[#dca72f] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_#16354F]">
+                    <Plus className="h-4 w-4" /> Masukkan{canAddCount ? ` ${canAddCount}` : ""}
+                  </Button>
+                </div>
+                {draft.trim() && !canAddCount ? <p className="mt-2 text-[11px] font-bold text-[#F04B36]">Tidak ada pilihan baru yang bisa dimasukkan.</p> : null}
               </form>
 
               <div className="mt-5 max-h-[286px] space-y-2 overflow-y-auto pr-1">
-                {options.map((option, index) => (
+                {options.length ? options.map((option, index) => (
                   <div key={`${option}-${index}`} className="group flex items-center gap-3 rounded-xl border-2 border-dashed border-[#16354F]/20 bg-[#FFFDF8] px-3 py-2.5 transition-colors hover:border-[#16354F]/45">
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 border-[#16354F] text-[11px] font-extrabold text-[#16354F]" style={{ backgroundColor: COLORS[index % COLORS.length] }}>
-                      {index + 1}
-                    </span>
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 border-[#16354F] text-[11px] font-extrabold text-[#16354F]" style={{ backgroundColor: COLORS[index % COLORS.length] }}>{index + 1}</span>
                     <span className="min-w-0 flex-1 truncate text-sm font-bold">{option}</span>
-                    <button type="button" onClick={() => removeOption(index)} disabled={isSpinning || options.length <= 2} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#16354F]/45 transition-colors hover:bg-[#FDE5DD] hover:text-[#F04B36] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F04B36] disabled:cursor-not-allowed disabled:opacity-25" aria-label={`Hapus ${option}`}>
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <button type="button" onClick={() => removeOption(index)} disabled={isSpinning} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#16354F]/45 transition-colors hover:bg-[#FDE5DD] hover:text-[#F04B36] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F04B36] disabled:cursor-not-allowed disabled:opacity-25" aria-label={`Hapus ${option}`}><Trash2 className="h-4 w-4" /></button>
                   </div>
-                ))}
+                )) : (
+                  <div className="rounded-xl border-2 border-dashed border-[#16354F]/20 bg-[#FFFDF8] px-4 py-5 text-center">
+                    <p className="font-serif text-lg font-bold">Belum ada kupon</p>
+                    <p className="mt-1 text-xs font-semibold leading-relaxed text-[#16354F]/60">Tulis pilihanmu sendiri atau tempel banyak baris sekaligus di atas.</p>
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 border-t-2 border-dashed border-[#16354F]/20 pt-5">
                 {winner ? (
                   <div className="relative isolate overflow-hidden rounded-2xl border-2 border-[#16354F] bg-[#FFF3E9] p-5">
                     <img src={ASSETS.stamp} alt="" aria-hidden="true" className="pointer-events-none absolute -right-7 -top-5 -z-10 w-44 rotate-[-10deg] opacity-15" />
-                    <p className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#F04B36]"><Check className="h-4 w-4 rounded-full bg-[#F04B36] p-[2px] text-white" /> Hasil roda</p>
-                    <p className="mt-2 font-serif text-3xl font-bold leading-none tracking-[-0.035em]">{winner}</p>
-                    <p className="mt-3 text-xs font-semibold text-[#16354F]/65">Keputusan resmi dari roda. Tidak menerima banding.</p>
+                    <p className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#F04B36]"><Check className="h-4 w-4 rounded-full bg-[#F04B36] p-[2px] text-white" /> Kartu yang didapat</p>
+                    <p className="mt-2 font-serif text-3xl font-bold leading-none tracking-[-0.035em]">{winner.name}</p>
+                    <div className="mt-4 flex items-center justify-between border-t-2 border-dashed border-[#16354F]/20 pt-3 text-[10px] font-extrabold uppercase tracking-[0.13em] text-[#16354F]/60"><span>Kartu #{String(winner.ticketNumber).padStart(2, "0")}</span><span>Hasil resmi roda</span></div>
                   </div>
                 ) : (
                   <div className="rounded-2xl bg-[#16354F] px-5 py-4 text-[#FFF9ED]">
-                    <p className="font-serif text-xl font-bold">Siap diundi?</p>
-                    <p className="mt-1 text-xs font-medium leading-relaxed text-[#FFF9ED]/70">Hasil pilihan akan muncul di sini setelah roda berhenti.</p>
+                    <p className="font-serif text-xl font-bold">Kartu hasil menunggu</p>
+                    <p className="mt-1 text-xs font-medium leading-relaxed text-[#FFF9ED]/70">Tambahkan setidaknya dua pilihan, lalu putar roda untuk mendapatkan kartu.</p>
                   </div>
                 )}
               </div>
@@ -280,10 +312,7 @@ export default function Home() {
           </aside>
         </section>
 
-        <footer className="mt-7 flex flex-col gap-2 border-t-2 border-dashed border-[#16354F]/20 pt-5 text-[11px] font-bold uppercase tracking-[0.16em] text-[#16354F]/55 sm:mt-10 sm:flex-row sm:items-center sm:justify-between">
-          <span>Satu putaran, satu keputusan</span>
-          <span>Pilihanmu tersimpan di perangkat ini</span>
-        </footer>
+        <footer className="mt-7 flex flex-col gap-2 border-t-2 border-dashed border-[#16354F]/20 pt-5 text-[11px] font-bold uppercase tracking-[0.16em] text-[#16354F]/55 sm:mt-10 sm:flex-row sm:items-center sm:justify-between"><span>Satu putaran, satu keputusan</span><span>Pilihanmu tersimpan di perangkat ini</span></footer>
       </div>
     </main>
   );
