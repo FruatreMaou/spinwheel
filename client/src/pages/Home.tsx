@@ -13,11 +13,21 @@ const STORAGE_KEY = "spinwheel-v2-user-options";
 const AUTO_REMOVE_STORAGE_KEY = "spinwheel-auto-remove-winner";
 
 const ASSETS = {
-  logo: "/manus-storage/spinwheel-logo_3dfdb099.png",
   confetti: "/manus-storage/spinwheel-confetti_ab55187f.png",
   stamp: "/manus-storage/spinwheel-stamp-winner_7d11795a.png",
   tickets: "/manus-storage/spinwheel-ticket-strip_354222d9.png",
 };
+
+function SpinWheelMark({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true" className={className}>
+      <path d="M24 3.5 28.4 8l6.2-1.1 1.1 6.2 5.6 3-3 5.7 3 5.6-5.6 3-1.1 6.2-6.2-1.1L24 40.5 19.6 36l-6.2 1.1-1.1-6.2-5.6-3 3-5.6-3-5.7 5.6-3 1.1-6.2L19.6 8 24 3.5Z" fill="#F04B36" stroke="#16354F" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M24 9.5v8M38.5 24h-8M24 38.5v-8M9.5 24h8M34.25 13.75l-5.7 5.7M34.25 34.25l-5.7-5.7M13.75 34.25l5.7-5.7M13.75 13.75l5.7 5.7" stroke="#FFF9ED" strokeWidth="2.2" strokeLinecap="round" />
+      <circle cx="24" cy="24" r="8.2" fill="#FFF9ED" stroke="#16354F" strokeWidth="1.7" />
+      <circle cx="24" cy="24" r="2.8" fill="#16354F" />
+    </svg>
+  );
+}
 
 function normalized(degrees: number) {
   return ((degrees % 360) + 360) % 360;
@@ -305,7 +315,7 @@ export default function Home() {
       <div className="relative z-10 mx-auto max-w-[1440px] px-5 pb-10 pt-5 sm:px-8 lg:px-12 lg:pb-12">
         <header className="flex items-center justify-between border-b-2 border-dashed border-[#16354F]/25 pb-5">
           <a href="#spin" className="group flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#F04B36]">
-            <img src={ASSETS.logo} alt="" className="h-11 w-11 transition-transform duration-200 group-hover:rotate-12" />
+            <SpinWheelMark className="h-11 w-11 transition-transform duration-200 group-hover:rotate-12" />
             <span className="leading-none">
               <span className="block font-serif text-2xl font-bold uppercase tracking-[-0.08em]"><span className="text-[#16354F]">Spin</span><span className="ml-0.5 italic text-[#F04B36]">Wheel</span></span>
               <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.22em] text-[#16354F]/65">Loket keputusan</span>

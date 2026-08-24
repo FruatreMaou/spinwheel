@@ -16,3 +16,5 @@
 - [x] Memeriksa atau membuat repository publik spinwheel.
 - [x] Mengunggah versi terbaru proyek ke GitHub.
 - [x] Memverifikasi URL repository dan status publik.
+- [x] Mengganti logo eksternal dengan logo grafis tertanam.
+- [x] Memeriksa build produksi agar tidak lagi bergantung pada URL logo lingkungan proyek.
